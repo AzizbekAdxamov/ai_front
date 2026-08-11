@@ -3,6 +3,7 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ChatMessages } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { AuthModal } from "@/components/auth/AuthModal";
 import { useEffect } from "react";
 import { useChatStore } from "@/store/chat-store";
 import { Menu, Sun, Moon } from "lucide-react";
@@ -74,6 +75,9 @@ export default function Home() {
           {/* Chat Input */}
           <ChatInput />
         </>
+
+        {/* AUTH MODAL (BOSQICH 2): chat ichida login/register */}
+        <AuthModal />
       </div>
     </div>
   );

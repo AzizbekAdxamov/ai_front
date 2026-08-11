@@ -12,6 +12,8 @@ import {
   GraduationCap,
   Sun,
   Moon,
+  LogOut,
+  User as UserIcon,
 } from "lucide-react";
 
 export function Sidebar() {
@@ -31,6 +33,8 @@ export function Sidebar() {
     deleteSession,
     // GUEST REJIM: login qilmaganlar uchun tarix o'rniga login taklifi
     authToken,
+    userFirstName,
+    logout,
   } = useChatStore();
 
   // Item'lar faqat BIRINCHI yuklashda stagger animatsiya oladi
@@ -269,6 +273,30 @@ export function Sidebar() {
 
           {/* Theme & Language & Footer */}
           <div className="border-t border-gray-100 dark:border-gray-800 p-3 space-y-2.5">
+            {/* LOGIN HOLATI (BOSQICH 2): login bo'lgan foydalanuvchi — ism + chiqish */}
+            {authToken && (
+              <div className="flex items-center gap-2.5 px-1">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center flex-shrink-0">
+                  <UserIcon className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
+                    {userFirstName || "Foydalanuvchi"}
+                  </p>
+                  <p className="text-[10px] text-green-500 font-medium">
+                    Tizimga kirilgan
+                  </p>
+                </div>
+                <button
+                  onClick={logout}
+                  title="Chiqish"
+                  className="p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 dark:hover:text-red-400 transition-all duration-200 active:scale-95"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {/* Tema tugmasi */}
             <button
               onClick={toggleTheme}

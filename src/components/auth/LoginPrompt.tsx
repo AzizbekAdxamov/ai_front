@@ -1,16 +1,16 @@
 "use client";
 
-import { LogIn, ShieldCheck, UserPlus } from "lucide-react";
+import { LogIn, ShieldCheck, UserPlus, Lock } from "lucide-react";
+import { useChatStore } from "@/store/chat-store";
 
 /**
- * GUEST REJIM (BOSQICH 1 + GUEST):
+ * GUEST REJIM (BOSQICH 1 + GUEST + BOSQICH 2):
  * Login qilmagan foydalanuvchi chat'ni ishlatishi mumkin, lekin tarixi
- * saqlanmaydi. Sidebar'da shu ixcham karta ko'rsatiladi — login qilganda
- * tarix accountinga bog'lanadi (hatto guest session ham davom ettiriladi).
+ * saqlanmaydi. Sidebar'da shu ixcham karta ko'rsatiladi — login/register
+ * CHAT ICHIDA modal orqali amalga oshiriladi (mentalaba.uz ga o'tilmaydi).
  */
 export function LoginPrompt() {
-  const currentUrl =
-    typeof window !== "undefined" ? window.location.href : "";
+  const openAuthModal = useChatStore((s) => s.openAuthModal);
 
   return (
     <div className="relative rounded-2xl border border-primary-100 dark:border-primary-800/50 bg-gradient-to-br from-primary-50/80 to-secondary-50/50 dark:from-primary-950/40 dark:to-secondary-950/30 p-4 overflow-hidden">
@@ -31,24 +31,32 @@ export function LoginPrompt() {
           saqlanmaydi. Kirganingizda barcha suhbatlar saqlanadi.
         </p>
 
-        <a
-          href={`https://mentalaba.uz/auth?sign-in&redirect=${encodeURIComponent(currentUrl)}`}
+        <button
+          onClick={() => openAuthModal("login")}
           className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs font-semibold shadow-md shadow-primary-500/25 hover:from-primary-600 hover:to-primary-700 hover:shadow-lg active:scale-[0.98] transition-all duration-200"
         >
           <LogIn className="w-3.5 h-3.5" />
           Accountga kirish
-        </a>
+        </button>
 
         <p className="mt-2.5 text-[11px] text-gray-400 dark:text-gray-500 text-center">
           Accountingiz yo'qmi?{" "}
-          <a
-            href="https://mentalaba.uz/auth?sign-up"
+          <button
+            onClick={() => openAuthModal("register")}
             className="inline-flex items-center gap-0.5 text-primary-500 dark:text-primary-400 font-medium hover:underline"
           >
             <UserPlus className="w-3 h-3" />
             Ro'yxatdan o'ting
-          </a>
+          </button>
         </p>
+
+        {/* BOSQICH 2 eslatmasi: kirish chat ichida bo'ladi */}
+        <div className="mt-3 pt-3 border-t border-primary-100 dark:border-primary-800/40 flex items-start gap-1.5">
+          <Lock className="w-3 h-3 mt-0.5 text-primary-400 flex-shrink-0" />
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">
+            Kirish va ro'yxatdan o'tish shu yerda, chat ichida amalga oshiriladi.
+          </p>
+        </div>
       </div>
     </div>
   );

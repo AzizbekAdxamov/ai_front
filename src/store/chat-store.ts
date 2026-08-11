@@ -34,6 +34,30 @@ interface ChatState {
   /** 401 bo'lsa login gate'ga o'tkazadi */
   handleAuthResponse: (response: Response) => boolean;
 
+  // ===== AUTH MODAL (BOSQICH 2 — chat ichida login/register) =====
+  authModalOpen: boolean;
+  authModalTab: "login" | "register";
+  /** Register oqimi: SMS kod bosqichi */
+  authModalStep: "form" | "verify";
+  /** Register SMS yuborilgan telefon raqam */
+  authPhone: string | null;
+  /** Foydalanuvchi ismi (verify javobidan yoki localStorage'dan) */
+  userFirstName: string | null;
+  openAuthModal: (tab?: "login" | "register") => void;
+  closeAuthModal: () => void;
+  /** Tokenlarni localStorage'ga yozib, store'ga o'rnatadi */
+  applyAuthTokens: (token: string, refresh: string | null, firstName?: string | null) => void;
+  /** Login: telefon + parol → backend proxy → tokenlar */
+  login: (phone: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Register: ism + telefon + parol → SMS yuboriladi */
+  register: (firstName: string, phone: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  /** SMS kodni tasdiqlash → tokenlar */
+  verifyCode: (phone: string, code: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Kodni qayta yuborish */
+  resendCode: (phone: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Chiqish: tokenlarni tozalash */
+  logout: () => void;
+
   // Session context
   currentUniversity: University | null;
   currentDirection: Direction | null;
@@ -166,6 +190,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   refreshToken: null,
   guestId: null,
   authChecked: false,
+  authModalOpen: false,
+  authModalTab: "login",
+  authModalStep: "form",
+  authPhone: null,
+  userFirstName: null,
   currentUniversity: null,
   currentDirection: null,
 
@@ -191,6 +220,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       try {
         const lastSession = localStorage.getItem(LAST_SESSION_KEY);
         if (lastSession) get().loadSession(lastSession);
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    // Login bo'lgan foydalanuvchi ismini tiklash
+    if (token && typeof window !== "undefined") {
+      try {
+        const name = localStorage.getItem("mentalaba_user_first_name");
+        if (name) set({ userFirstName: name });
       } catch (e) {
         /* ignore */
       }
@@ -235,6 +273,131 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return true;
     }
     return false;
+  },
+
+  // ===== AUTH MODAL ACTIONS (BOSQICH 2) =====
+  // MUHIM (reviewer fix): modal har ochilganda "form" bosqichidan boshlanadi.
+  // Aks holda avvalgi registerdagi "verify" bosqichi qolib ketib, login
+  // formasi o'rniga eski SMS ekrani chiqishi mumkin edi. Register action'i
+  // esa o'zi "verify" ga o'tkazadi (modal ochilgandan keyin).
+  openAuthModal: (tab) => {
+    set({ authModalOpen: true, authModalTab: tab || "login", authModalStep: "form", authPhone: null });
+  },
+
+  closeAuthModal: () => {
+    set({ authModalOpen: false, authModalStep: "form", authPhone: null });
+  },
+
+  /**
+   * Tokenlarni localStorage'ga yozib, store'ga o'rnatadi.
+   * (mentalaba_access_token kaliti — initAuth ham shu kalitni o'qiydi)
+   */
+  applyAuthTokens: (token: string, refresh: string | null, firstName?: string | null) => {
+    try {
+      localStorage.setItem("mentalaba_access_token", token);
+      if (refresh) localStorage.setItem("mentalaba_refresh_token", refresh);
+      if (firstName) localStorage.setItem("mentalaba_user_first_name", firstName);
+    } catch (e) {
+      /* ignore */
+    }
+    set({
+      authToken: token,
+      refreshToken: refresh,
+      userFirstName: firstName || get().userFirstName,
+      authModalOpen: false,
+      authModalTab: "login",
+      authModalStep: "form",
+      authPhone: null,
+    });
+    // Login bo'lgach tarixni yuklaymiz (guest sessionlar user'ga bog'lanadi)
+    get().loadSessions();
+  },
+
+  login: async (phone, password) => {
+    try {
+      const response = await fetch(apiUrl("/api/v1/auth/login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, password }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || "Login amalga oshmadi" };
+      }
+      get().applyAuthTokens(result.data.token, result.data.refreshToken);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: "Xizmatga ulanib bo'lmadi — qayta urinib ko'ring" };
+    }
+  },
+
+  register: async (firstName, phone, password) => {
+    try {
+      const response = await fetch(apiUrl("/api/v1/auth/register"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ first_name: firstName, phone, password, register_type: "phone" }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || "Ro'yxatdan o'tish amalga oshmadi" };
+      }
+      // SMS yuborildi → verify bosqichiga o'tamiz (AuthModal kod ekranini ko'rsatadi)
+      set({ authModalStep: "verify", authPhone: phone });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: "Xizmatga ulanib bo'lmadi — qayta urinib ko'ring" };
+    }
+  },
+
+  verifyCode: async (phone, code) => {
+    try {
+      const response = await fetch(apiUrl("/api/v1/auth/verify"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        return { ok: false, error: result.error || "Kod noto'g'ri" };
+      }
+      get().applyAuthTokens(result.data.token, result.data.refreshToken, result.data.firstName);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: "Xizmatga ulanib bo'lmadi — qayta urinib ko'ring" };
+    }
+  },
+
+  resendCode: async (phone) => {
+    try {
+      const response = await fetch(apiUrl("/api/v1/auth/resend-code"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, register_type: "phone" }),
+      });
+      const result = await response.json();
+      return response.ok && result.success ? { ok: true } : { ok: false, error: result.error };
+    } catch (e) {
+      return { ok: false, error: "Xizmatga ulanib bo'lmadi — qayta urinib ko'ring" };
+    }
+  },
+
+  logout: () => {
+    try {
+      localStorage.removeItem("mentalaba_access_token");
+      localStorage.removeItem("mentalaba_refresh_token");
+      localStorage.removeItem("mentalaba_user_first_name");
+    } catch (e) {
+      /* ignore */
+    }
+    set({
+      authToken: null,
+      refreshToken: null,
+      userFirstName: null,
+      sessions: [],
+      messages: [],
+      currentSessionId: null,
+    });
   },
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
